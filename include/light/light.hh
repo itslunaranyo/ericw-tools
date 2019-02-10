@@ -172,7 +172,7 @@ extern std::vector<const modelinfo_t *> selfshadowlist;
 extern std::vector<const modelinfo_t *> shadowworldonlylist;
 extern std::vector<const modelinfo_t *> switchableshadowlist;
 
-extern int numDirtVectors;
+//extern int numDirtVectors;
 
 // other flags
 
@@ -270,6 +270,7 @@ public:
     /* dirt */
     lockable_bool_t globalDirt;          // apply dirt to all lights (unless they override it) + sunlight + minlight?
     lockable_vec_t dirtMode, dirtDepth, dirtScale, dirtGain, dirtAngle;
+	lockable_vec_t dirtRayGen, dirtSamples;	// lunaran
     
     lockable_bool_t minlightDirt;   // apply dirt to minlight?
     
@@ -301,25 +302,27 @@ public:
     lockable_vec3_t sun2vec;
     lockable_vec_t sun_deviance;
     
-    globalconfig_t() :
-        scaledist {"dist", 1.0, 0.0f, 100.0f},
-        rangescale {"range", 0.5f, 0.0f, 100.0f},
-        global_anglescale {strings{"anglescale", "anglesense"}, 0.5, 0.0f, 1.0f},
-        lightmapgamma {"gamma", 1.0, 0.0f, 100.0f},
+	globalconfig_t() :
+		scaledist{ "dist", 1.0, 0.0f, 100.0f },
+		rangescale{ "range", 0.5f, 0.0f, 100.0f },
+		global_anglescale{ strings{"anglescale", "anglesense"}, 0.5, 0.0f, 1.0f },
+		lightmapgamma{ "gamma", 1.0, 0.0f, 100.0f },
 
-        addminlight {"addmin", false},
-        minlight {strings{"light", "minlight"}, 0},
-        minlight_color {strings{"minlight_color", "mincolor"}, 255.0f, 255.0f, 255.0f, vec3_transformer_t::NORMALIZE_COLOR_TO_255},
-        spotlightautofalloff { "spotlightautofalloff", false }, //mxd
+		addminlight{ "addmin", false },
+		minlight{ strings{"light", "minlight"}, 0 },
+		minlight_color{ strings{"minlight_color", "mincolor"}, 255.0f, 255.0f, 255.0f, vec3_transformer_t::NORMALIZE_COLOR_TO_255 },
+		spotlightautofalloff{ "spotlightautofalloff", false }, //mxd
 
-        /* dirt */
-        globalDirt {strings{"dirt", "dirty"}, false},
-        dirtMode {"dirtmode", 0.0f},
-        dirtDepth {"dirtdepth", 128.0f, 1.0f, std::numeric_limits<float>::infinity()},
-        dirtScale {"dirtscale", 1.0f, 0.0f, 100.0f},
-        dirtGain {"dirtgain", 1.0f, 0.0f, 100.0f},
-        dirtAngle {"dirtangle", 88.0f, 0.0f, 90.0f},
-        minlightDirt {"minlight_dirt", false},
+		/* dirt */
+		globalDirt{ strings{"dirt", "dirty"}, false },
+		dirtMode{ "dirtmode", 0.0f},
+		dirtDepth{ "dirtdepth", 128.0f, 1.0f, std::numeric_limits<float>::infinity() },
+		dirtScale{ "dirtscale", 1.0f, 0.0f, 100.0f },
+		dirtGain{ "dirtgain", 1.0f, 0.0f, 100.0f },
+		dirtAngle{ "dirtangle", 88.0f, 0.0f, 90.0f },
+		dirtRayGen{ "dirtraygen", 0.0f, 0.0f, 3.0f },	//lunaran
+		dirtSamples{ "dirtsamples", 32.0f, 4.0f, std::numeric_limits<float>::infinity() },		//lunaran
+		minlightDirt {"minlight_dirt", false},
 
         /* phong */
         phongallowed {"phong", true},
@@ -360,6 +363,7 @@ public:
             &spotlightautofalloff, //mxd
             &globalDirt,
             &dirtMode, &dirtDepth, &dirtScale, &dirtGain, &dirtAngle,
+			&dirtRayGen, &dirtSamples, //lunaran
             &minlightDirt,
             &phongallowed,
             &bounce, &bouncestyled, &bouncescale, &bouncecolorscale,

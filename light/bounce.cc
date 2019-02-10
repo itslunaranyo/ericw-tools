@@ -73,7 +73,7 @@ MakePatch (const globalconfig_t &cfg, winding_t *w)
     
     // calculate direct light
     
-    raystream_t *rs = MakeRayStream(numDirtVectors);
+    raystream_t *rs = MakeRayStream(cfg.dirtSamples.intValue());
     p->lightByStyle = GetDirectLighting(cfg, rs, p->samplepoint, p->plane.normal);
     delete rs;
     

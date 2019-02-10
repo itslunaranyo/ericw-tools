@@ -162,6 +162,8 @@ RTCScene scene;
 sceneinfo skygeom;    // sky. always occludes.
 sceneinfo solidgeom;  // solids. always occludes.
 sceneinfo filtergeom; // conditional occluders.. needs to run ray intersection filter
+// lunaran TODO: add separate geometries for water, lava, slime, tele
+
 
 static const mbsp_t *bsp_static;
 
@@ -628,6 +630,7 @@ Embree_TraceInit(const mbsp_t *bsp)
                     solidfaces.push_back(face);
                 }
                 continue;
+				// lunaran TODO: add separate geometries for water, lava, slime, tele akin to skyfaces
             }
             
             // solid faces
