@@ -30,7 +30,7 @@ using namespace std;
 /* Dirtmapping borrowed from q3map2, originally by RaP7oR */
 
 rayGenFunc dirtRayGen;
-static std::vector<qvec3f> dirtVectors;
+std::vector<qvec3f> dirtVectors;
 //int numDirtVectors = 0;
 
 static inline float crandom() { return 1 - Random() * 2; }

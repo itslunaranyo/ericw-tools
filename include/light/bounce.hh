@@ -51,4 +51,6 @@ void MakeTextureColors (const mbsp_t *bsp);
 void MakeBounceLights (const globalconfig_t &cfg, const mbsp_t *bsp);
 void Face_LookupTextureColor (const mbsp_t *bsp, const bsp2_dface_t *face, vec3_t color); //mxd
 
+extern std::vector<qvec3f> dirtVectors;
+
 #endif /* __LIGHT_BOUNCE_H__ */
