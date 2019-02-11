@@ -2,3 +2,6 @@ bin/
 build/
 CMakeFiles/
 *.xcodeproj
+*.vcxproj
+*.vcxproj.filters
+*.cmake
