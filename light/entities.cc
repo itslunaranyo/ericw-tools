@@ -24,6 +24,7 @@
 #include <light/light.hh>
 #include <light/entities.hh>
 #include <light/ltface.hh>
+#include <light/gather.hh> //lunaran
 #include <common/bsputils.hh>
 
 using strings = std::vector<std::string>;
@@ -358,13 +359,15 @@ CheckEntityFields(const globalconfig_t &cfg, light_t *entity)
     }
 
     /* set up deviance and samples defaults */
-    if (entity->deviance.floatValue() > 0 && entity->samples.intValue() == 0) {
-        entity->samples.setFloatValue(16);
-    }
-    if (entity->deviance.floatValue() <= 0.0f || entity->samples.intValue() <= 1) {
-        entity->deviance.setFloatValue(0.0f);
-        entity->samples.setFloatValue(1);
-    }
+	if (entity->samples.intValue() == 0) { // lunaran - don't overwrite samples keyvalue from map
+		if (entity->deviance.floatValue() > 0 && entity->samples.intValue() == 0) {
+			entity->samples.setFloatValue(16);
+		}
+		if (entity->deviance.floatValue() <= 0.0f || entity->samples.intValue() <= 1) {
+			entity->deviance.setFloatValue(0.0f);
+			entity->samples.setFloatValue(1);
+		}
+	}
     /* For most formulas, we need to divide the light value by the number of
        samples (jittering) to keep the brightness approximately the same. */
     if (entity->getFormula() == LF_INVERSE
@@ -393,6 +396,43 @@ Dirt_ResolveFlag(const globalconfig_t &cfg, int dirtInt)
         if (dirtInt == 1) return true;
         else if (dirtInt == -1) return false;
         else return cfg.globalDirt.boolValue();
+}
+
+
+/*
+ * =============
+ * SetupDomes
+ *
+ * Generate a local set of rays to use for domelight traces
+ * =============
+ */
+static void
+SetupDomes(const globalconfig_t &cfg)
+{
+	Gather_SetupDomeGen(cfg);
+
+	for (light_t &entity : all_lights) {
+		if (!entity.dome.boolValue())
+			continue;
+
+		float ang = entity.spotlight ? entity.spotangle.floatValue() / 2 : 90;
+
+		if (entity.samples.intValue() == 1) {
+			// 'angle 0' defaults to 180, so for a directional sun set 'samples 1' and
+			// we'll make sure that sample is right down the center
+			entity.domerays.clear();
+			entity.domerays.push_back(vec3_t_to_glm(entity.spotvec) * -1);
+		}
+		else {
+			GenRaysCone(domeRayGen, entity.samples.intValue(), entity.spotvec, ang, entity.domerays);
+		}
+
+		// the physical location of a dome light is meaningless, so disable
+		// any relevant settings to avoid weird behavior
+		entity.atten.setFloatValue(LF_INFINITE);
+		entity.dirt_on_radius.setFloatValue(0.0f);
+		entity.dirt_off_radius.setFloatValue(0.0f);
+	}
 }
 
 /*
@@ -645,6 +685,9 @@ DuplicateEntity(const light_t &src)
 static void
 JitterEntity(const light_t entity)
 {
+	if (entity.deviance.floatValue() == 0.0f || entity.dome.boolValue() ) // lunaran
+		return;
+
     /* jitter the light */
     for ( int j = 1; j < entity.samples.intValue(); j++ )
     {
@@ -1305,6 +1348,7 @@ SetupLights(const globalconfig_t &cfg, const mbsp_t *bsp)
     
     MatchTargets();
     SetupSpotlights(cfg);
+	SetupDomes(cfg);
     SetupSuns(cfg);
     SetupSkyDome(cfg);
     FixLightsOnFaces(bsp);

@@ -9,6 +9,7 @@ set(LIGHT_INCLUDES
 	${CMAKE_SOURCE_DIR}/include/light/bounce.hh
 	${CMAKE_SOURCE_DIR}/include/light/surflight.hh
 	${CMAKE_SOURCE_DIR}/include/light/ltface.hh
+	${CMAKE_SOURCE_DIR}/include/light/gather.hh
 	${CMAKE_SOURCE_DIR}/include/light/trace.hh
 	${CMAKE_SOURCE_DIR}/include/light/litfile.hh
 	${CMAKE_SOURCE_DIR}/include/light/settings.hh)
@@ -17,6 +18,7 @@ set(LIGHT_SOURCES
 	entities.cc
 	litfile.cc
 	ltface.cc
+	gather.cc
 	trace.cc
 	light.cc
 	phong.cc

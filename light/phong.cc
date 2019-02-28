@@ -388,7 +388,8 @@ static vector<qvec3f> Face_VertexNormals(const mbsp_t *bsp, const bsp2_dface_t *
 static vector<face_cache_t> MakeFaceCache(const mbsp_t *bsp)
 {
     vector<face_cache_t> result;
-    for (int i=0; i<bsp->numfaces; i++) {
+
+	for (int i=0; i<bsp->numfaces; i++) {
         const bsp2_dface_t *face = BSP_GetFace(bsp, i);
         result.push_back(face_cache_t{bsp, face, Face_VertexNormals(bsp, face)});
     }

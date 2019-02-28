@@ -270,7 +270,7 @@ public:
     /* dirt */
     lockable_bool_t globalDirt;          // apply dirt to all lights (unless they override it) + sunlight + minlight?
     lockable_vec_t dirtMode, dirtDepth, dirtScale, dirtGain, dirtAngle;
-	lockable_vec_t dirtRayGen, dirtSamples;	// lunaran
+	lockable_vec_t dirtSamples;	// lunaran
     
     lockable_bool_t minlightDirt;   // apply dirt to minlight?
     
@@ -320,7 +320,6 @@ public:
 		dirtScale{ "dirtscale", 1.0f, 0.0f, 100.0f },
 		dirtGain{ "dirtgain", 1.0f, 0.0f, 100.0f },
 		dirtAngle{ "dirtangle", 88.0f, 0.0f, 90.0f },
-		dirtRayGen{ "dirtraygen", 0.0f, 0.0f, 3.0f },	//lunaran
 		dirtSamples{ "dirtsamples", 32.0f, 4.0f, std::numeric_limits<float>::infinity() },		//lunaran
 		minlightDirt {"minlight_dirt", false},
 
@@ -363,7 +362,7 @@ public:
             &spotlightautofalloff, //mxd
             &globalDirt,
             &dirtMode, &dirtDepth, &dirtScale, &dirtGain, &dirtAngle,
-			&dirtRayGen, &dirtSamples, //lunaran
+			&dirtSamples, //lunaran
             &minlightDirt,
             &phongallowed,
             &bounce, &bouncestyled, &bouncescale, &bouncecolorscale,

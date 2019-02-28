@@ -20,6 +20,7 @@
 #include <light/light.hh>
 #include <light/entities.hh>
 #include <light/gather.hh>
+#include <light/ltface.hh>
 
 #include <common/mathlib.hh>
 
@@ -27,17 +28,17 @@
 
 using namespace std;
 
-/* Dirtmapping borrowed from q3map2, originally by RaP7oR */
 
-rayGenFunc dirtRayGen;
+/* Dirtmapping borrowed from q3map2, originally by RaP7oR */
+rayGenFunc dirtRayGen = 0;
+rayGenFunc domeRayGen = 0;
 std::vector<qvec3f> dirtVectors;
-//int numDirtVectors = 0;
 
 static inline float crandom() { return 1 - Random() * 2; }
 static inline float lerp(float a, float b, float mix) { return a + (b - a)*mix; }
 
 // from q3map2
-static void
+void
 GetUpRtVecs(const vec3_t normal, vec3_t myUp, vec3_t myRt)
 {
 	/* check if the normal is aligned to the world-up */
@@ -60,6 +61,24 @@ GetUpRtVecs(const vec3_t normal, vec3_t myUp, vec3_t myRt)
 		VectorNormalize(myUp);
 	}
 }
+
+// from q3map2
+void
+TransformToTangentSpace(const vec3_t normal, const vec3_t myUp, const vec3_t myRt, const qvec3f inputvec, vec3_t outputvec)
+{
+	for (int i = 0; i < 3; i++)
+		outputvec[i] = myRt[i] * inputvec[0] + myUp[i] * inputvec[1] + normal[i] * inputvec[2];
+}
+void
+TransformToTangentSpace(const vec3_t normal, const vec3_t up, const vec3_t rt, const qvec3f &inputvec, qvec3f &outputvec)
+{
+	qvec3f temp;
+	for (int i = 0; i < 3; i++) {
+		temp[i] = rt[i] * inputvec[0] + up[i] * inputvec[1] + normal[i] * inputvec[2];
+	}
+	outputvec = temp;
+}
+
 
 
 /* ======================================================================== 
@@ -85,7 +104,6 @@ RandomRay(const float maxpitch)
 	cmp = cos(maxpitch * Q_PI / 180.0);	// declination
 	z = lerp(cmp, 1.0, Random());	// eliminate bunching up at the poles
 	k = sqrt(1 - z * z);
-	//VectorSet(out, k * cos(ang), k * sin(ang), z);
 	return qvec3f(k * cos(ang), k * sin(ang), z);
 }
 
@@ -107,12 +125,10 @@ Random Ray Generation
 static int
 GenRaysRandom(const int samples, const float maxpitch, std::vector<qvec3f> &rays)
 {
-	int i;
-	//*rays = (vec3_t *)calloc(samples, sizeof(vec3_t));
 	rays.clear();
 	rays.reserve(samples);
 
-	for (i = 0; i < samples; i++) {
+	for (int i = 0; i < samples; i++) {
 		rays.push_back(RandomRay(maxpitch));
 	}
 
@@ -128,7 +144,7 @@ GenRaysRandom(const int samples, const float maxpitch, std::vector<qvec3f> &rays
 Elevation/Angle Ray Generation
 - the original, default dirt ray generator taken from q3map2
 - does not compensate properly for rays bunching up near the pole, which
-	manifests visually as dirt gamma being higher than it is
+	manifests visually as dirt gamma being a little higher than it is
 */
 
 static int
@@ -145,7 +161,6 @@ GenRaysAngle(const int desiredSamples, const float maxpitch, std::vector<qvec3f>
 	const float elevationStep = (float)DEG2RAD(maxpitch / pitchSteps);
 	//logprint("%i samp, %f pitch: %i x %i = %i\n", desiredSamples, maxpitch, angleSteps, pitchSteps, angleSteps * pitchSteps);
 
-	//*rays = (vec3_t *)calloc(angleSteps*pitchSteps, sizeof(vec3_t));
 	rays.clear();
 	rays.reserve(pitchSteps * angleSteps);
 
@@ -156,9 +171,6 @@ GenRaysAngle(const int desiredSamples, const float maxpitch, std::vector<qvec3f>
 		float elevation = elevationStep * 0.5f;
 		for (int j = 0; j < pitchSteps; j++, elevation += elevationStep) {
 			rays.emplace_back(sin(elevation) * cos(angle), sin(elevation) * sin(angle), cos(elevation));
-			//(*rays)[numRays][0] = sin(elevation) * cos(angle);
-			//(*rays)[numRays][1] = sin(elevation) * sin(angle);
-			//(*rays)[numRays][2] = cos(elevation);
 			numRays++;
 		}
 	}
@@ -341,8 +353,7 @@ Halton Sequence Ray Generation
 - generate pseudorandom uniform rays that don't	appear to cluster
 - https://www.slideshare.net/luk036/n-sphere
 
-- lunaran TODO: what does a randomized-per-sample application of Halton(2,3) look like?
-	start with a random non-zero index?
+- use a non-zero starting index for a 'randomized'-per-sample application
 */
 
 static float
@@ -373,7 +384,6 @@ GenRaysHalton(const int samples, const float maxpitch, std::vector<qvec3f> &rays
 	int i;
 	float ang, z, k, cmp;
 
-	//*rays = (vec3_t*)calloc(samples, sizeof(vec3_t));
 	rays.clear();
 	rays.reserve(samples);
 
@@ -382,7 +392,6 @@ GenRaysHalton(const int samples, const float maxpitch, std::vector<qvec3f> &rays
 		cmp = cos(maxpitch * Q_PI / 180.0);
 		z = lerp(cmp, 1.0, Halton(i, 3));
 		k = sqrt(1 - z * z);
-		//VectorSet((*rays)[i], k * cos(ang), k * sin(ang), z);
 		rays.emplace_back(k * cos(ang), k * sin(ang), z);
 	}
 
@@ -392,8 +401,165 @@ GenRaysHalton(const int samples, const float maxpitch, std::vector<qvec3f> &rays
 
 
 
+
+int
+GenRaysCone(rayGenFunc gen, const int samples, const vec3_t center, const float conesize, std::vector<qvec3f> &rays)
+{
+	gen(samples, conesize, rays);
+
+	// align rays to center
+	vec3_t up, right, fwd;
+	VectorCopy(center, fwd);
+	VectorScale(fwd, -1, fwd);
+	GetUpRtVecs(fwd, up, right);
+
+	for (int i = 0; i < samples; i++) {
+		TransformToTangentSpace(fwd, up, right, rays[i], rays[i]);
+	}
+
+	return rays.size();
+}
+
+int
+GenRays(rayGenFunc gen, const int samples, std::vector<qvec3f> &rays)
+{
+	gen(samples, 180, rays);
+	return rays.size();
+}
+
+
+
 /* ======================================================================== */
 
+
+
+/* ======================================================================== */
+
+static inline float fraction(float min, float val, float max) {
+	if (val >= max) return 1.0;
+	if (val <= min) return 0.0;
+
+	return (val - min) / (max - min);
+}
+
+
+/*
+ * ============
+ * Dirt_GetScaleFactor
+ *
+ * returns scale factor for dirt/ambient occlusion
+ * ============
+ */
+vec_t
+Dirt_GetScaleFactor(const globalconfig_t &cfg, vec_t occlusion, const light_t *entity, const vec_t entitydist, const lightsurf_t *surf)
+{
+	vec_t light_dirtgain = cfg.dirtGain.floatValue();
+	vec_t light_dirtscale = cfg.dirtScale.floatValue();
+	bool usedirt;
+
+	/* is dirt processing disabled entirely? */
+	if (!dirt_in_use)
+		return 1.0f;
+	if (surf && surf->nodirt)
+		return 1.0f;
+
+	/* should this light be affected by dirt? */
+	if (entity) {
+		if (entity->dirt.intValue() == -1) {
+			usedirt = false;
+		}
+		else if (entity->dirt.intValue() == 1) {
+			usedirt = true;
+		}
+		else {
+			usedirt = cfg.globalDirt.boolValue();
+		}
+	}
+	else {
+		/* no entity is provided, assume the caller wants dirt */
+		usedirt = true;
+	}
+
+	/* if not, quit */
+	if (!usedirt)
+		return 1.0;
+
+	/* override the global scale and gain values with the light-specific
+	   values, if present */
+	if (entity) {
+		if (entity->dirtgain.floatValue())
+			light_dirtgain = entity->dirtgain.floatValue();
+		if (entity->dirtscale.floatValue())
+			light_dirtscale = entity->dirtscale.floatValue();
+	}
+
+	/* early out */
+	if (occlusion <= 0.0f) {
+		return 1.0f;
+	}
+
+	/* apply gain */
+	float outDirt = pow(occlusion, light_dirtgain);
+	if (outDirt > 1.0f) {
+		outDirt = 1.0f;
+	}
+
+	/* apply scale */
+	outDirt *= light_dirtscale;
+	if (outDirt > 1.0f) {
+		outDirt = 1.0f;
+	}
+
+	/* lerp based on distance to light */
+	if (entity) {
+		// From 0 to _dirt_off_radius units, no dirt.
+		// From _dirt_off_radius to _dirt_on_radius, the dirt linearly ramps from 0 to full, and after _dirt_on_radius, it's full dirt.
+
+		if (entity->dirt_on_radius.isChanged()
+			&& entity->dirt_off_radius.isChanged()) {
+
+			const float onRadius = entity->dirt_on_radius.floatValue();
+			const float offRadius = entity->dirt_off_radius.floatValue();
+
+			if (entitydist < offRadius) {
+				outDirt = 0.0;
+			}
+			else if (entitydist >= offRadius && entitydist < onRadius) {
+				const float frac = fraction(offRadius, entitydist, onRadius);
+				outDirt = frac * outDirt;
+			}
+		}
+	}
+
+	/* return to sender */
+	return 1.0f - outDirt;
+}
+
+/*
+ * =============
+ * Gather_SetupDomeGen
+ * =============
+ */
+void
+Gather_SetupDomeGen(const globalconfig_t &cfg)
+{
+	if (!domeRayGen) {
+		switch (cfg.dirtMode.intValue()) {
+		case 2:
+			domeRayGen = GenRaysAngle;
+			logprint("Using elevation/angle dome ray generation\n");
+			break;
+		case 1:
+			domeRayGen = GenRaysRandom;
+			logprint("Using random dome ray generation\n");
+			break;
+		case 0:
+		default:
+			domeRayGen = GenRaysHalton;
+			logprint("Using Halton dome ray generation\n");
+		}
+	}
+}
 
 /*
  * ============
@@ -402,9 +568,9 @@ GenRaysHalton(const int samples, const float maxpitch, std::vector<qvec3f> &rays
  * sets up dirtmap (ambient occlusion)
  * ============
  */
-void SetupDirt(globalconfig_t &cfg) {
+void SetupDirt(globalconfig_t &cfg)
+{
 	// check if needed
-
 	if (!cfg.globalDirt.boolValue()
 		&& cfg.globalDirt.isLocked()) {
 		// HACK: "-dirt 0" disables all dirtmapping even if we would otherwise use it.
@@ -449,7 +615,7 @@ void SetupDirt(globalconfig_t &cfg) {
 	lunaran - user specified ray generator
 	Halton is the new default, because it yields the best-looking results and does it the fastest
 	*/
-	switch (cfg.dirtRayGen.intValue()) {
+	switch (cfg.dirtMode.intValue()) {
 		/*
 	case 3:
 		dirtRayGen = GenRaysPoisson;
@@ -474,14 +640,6 @@ void SetupDirt(globalconfig_t &cfg) {
 
 	/* emit some statistics */
 	logprint("%9d dirtmap vectors\n", dirtVectors.size());
-}
-
-// from q3map2
-static void
-TransformToTangentSpace(const vec3_t normal, const vec3_t myUp, const vec3_t myRt, const qvec3f inputvec, vec3_t outputvec)
-{
-	for (int i = 0; i < 3; i++)
-		outputvec[i] = myRt[i] * inputvec[0] + myUp[i] * inputvec[1] + normal[i] * inputvec[2];
 }
 
 static qvec3f
@@ -616,3 +774,4 @@ LightFace_CalculateDirt(lightsurf_t *lightsurf)
 	free(myUps);
 	free(myRts);
 }
+

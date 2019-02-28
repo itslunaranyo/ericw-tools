@@ -29,6 +29,7 @@
 #include <light/imglib.hh> //mxd
 #include <light/entities.hh>
 #include <light/ltface.hh>
+#include <light/gather.hh> //lunaran
 
 #include <common/polylib.hh>
 #include <common/bsputils.hh>

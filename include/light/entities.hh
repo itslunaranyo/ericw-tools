@@ -70,6 +70,8 @@ public:
     const char *classname() const;
     
     vec3_t mins, maxs;
+
+	std::vector<qvec3f> domerays; //lunaran
     
 public:
     lockable_vec_t light, atten, formula, spotangle, spotangle2, style, anglescale;
@@ -78,6 +80,7 @@ public:
     lockable_vec_t sun; //mxd
     lockable_vec_t falloff; //mxd
     lockable_bool_t bleed;
+    lockable_bool_t dome; //lunaran
     lockable_vec3_t origin, color, mangle, projangle;
     lockable_string_t project_texture;
 
@@ -116,6 +119,7 @@ public:
         sun { "sun", 0 }, //mxd
         falloff{ "falloff", 0.0f }, //mxd
         bleed { "bleed", false },
+        dome { "dome", false }, //lunaran
         origin { "origin", 0, 0, 0 },
         color { "color", 255.0f, 255.0f, 255.0f, vec3_transformer_t::NORMALIZE_COLOR_TO_255 },
         mangle { "mangle", 0, 0, 0 }, // not transformed to vec
@@ -136,6 +140,7 @@ public:
             &dirt_off_radius, &dirt_on_radius,
             &sun, //mxd
             &falloff, //mxd
+			&dome, //lunaran
             &origin, &color, &mangle, &projangle, &project_texture
         }};
     }

@@ -886,7 +886,7 @@ Lightmap_ForStyle_ReadOnly(const lightsurf_t *lightsurf, const int style)
  * Otherwise, return the next available map.  A new map is not marked as
  * allocated since it may not be kept if no lights hit.
  */
-static lightmap_t *
+lightmap_t *
 Lightmap_ForStyle(lightmapdict_t *lightmaps, const int style, const lightsurf_t *lightsurf)
 {
     for (auto &lm : *lightmaps) {
@@ -946,6 +946,9 @@ GetLightValue(const globalconfig_t &cfg, const light_t *entity, vec_t dist)
 {
     const float light = entity->light.floatValue();
 
+    if (entity->getFormula() == LF_INFINITE || entity->getFormula() == LF_LOCALMIN)
+        return light;
+
     //mxd. Apply falloff?
     const float lightdistance = entity->falloff.floatValue();
     if (lightdistance > 0.0f) {
@@ -958,9 +961,6 @@ GetLightValue(const globalconfig_t &cfg, const light_t *entity, vec_t dist)
         }
     }
     
-    if (entity->getFormula() == LF_INFINITE || entity->getFormula() == LF_LOCALMIN)
-        return light;
-
     vec_t value = cfg.scaledist.floatValue() * entity->atten.floatValue() * dist;
 
     switch (entity->getFormula()) {
@@ -1105,100 +1105,6 @@ Light_ClampMin(lightsample_t *sample, const vec_t light, const vec3_t color)
     }
 }
 
-static float fraction(float min, float val, float max) {
-    if (val >= max) return 1.0;
-    if (val <= min) return 0.0;
-    
-    return (val - min) / (max - min);
-}
-
-/*
- * ============
- * Dirt_GetScaleFactor
- *
- * returns scale factor for dirt/ambient occlusion
- * ============
- */
-static inline vec_t
-Dirt_GetScaleFactor(const globalconfig_t &cfg, vec_t occlusion, const light_t *entity, const vec_t entitydist, const lightsurf_t *surf)
-{
-    vec_t light_dirtgain = cfg.dirtGain.floatValue();
-    vec_t light_dirtscale = cfg.dirtScale.floatValue();
-    bool usedirt;
-
-    /* is dirt processing disabled entirely? */
-    if (!dirt_in_use)
-        return 1.0f;
-    if (surf && surf->nodirt)
-        return 1.0f;
-
-    /* should this light be affected by dirt? */
-    if (entity) {
-        if (entity->dirt.intValue() == -1) {
-            usedirt = false;
-        } else if (entity->dirt.intValue() == 1) {
-            usedirt = true;
-        } else {
-            usedirt = cfg.globalDirt.boolValue();
-        }
-    } else {
-        /* no entity is provided, assume the caller wants dirt */
-        usedirt = true;
-    }
-
-    /* if not, quit */
-    if (!usedirt)
-        return 1.0;
-
-    /* override the global scale and gain values with the light-specific
-       values, if present */
-    if (entity) {
-        if (entity->dirtgain.floatValue())
-            light_dirtgain = entity->dirtgain.floatValue();
-        if (entity->dirtscale.floatValue())
-            light_dirtscale = entity->dirtscale.floatValue();
-    }
-
-    /* early out */
-    if ( occlusion <= 0.0f ) {
-        return 1.0f;
-    }
-
-    /* apply gain (does this even do much? heh) */
-    float outDirt = pow( occlusion, light_dirtgain );
-    if ( outDirt > 1.0f ) {
-        outDirt = 1.0f;
-    }
-
-    /* apply scale */
-    outDirt *= light_dirtscale;
-    if ( outDirt > 1.0f ) {
-        outDirt = 1.0f;
-    }
-
-    /* lerp based on distance to light */
-    if (entity) {
-        // From 0 to _dirt_off_radius units, no dirt.
-        // From _dirt_off_radius to _dirt_on_radius, the dirt linearly ramps from 0 to full, and after _dirt_on_radius, it's full dirt.
-        
-        if (entity->dirt_on_radius.isChanged()
-            && entity->dirt_off_radius.isChanged()) {
-            
-            const float onRadius = entity->dirt_on_radius.floatValue();
-            const float offRadius = entity->dirt_off_radius.floatValue();
-            
-            if (entitydist < offRadius) {
-                outDirt = 0.0;
-            } else if (entitydist >= offRadius && entitydist < onRadius) {
-                const float frac = fraction(offRadius, entitydist, onRadius);
-                outDirt = frac * outDirt;
-            }
-        }
-    }
-    
-    /* return to sender */
-    return 1.0f - outDirt;
-}
 
 /*
  * ================
@@ -1420,6 +1326,96 @@ GetDirectLighting(const globalconfig_t &cfg, raystream_t *rs, const vec3_t origi
 
 
 /*
+ * ============
+ * LightFace_Dome
+ * ============
+ */
+void
+LightFace_Dome(lightsurf_t *lightsurf, const light_t *entity, lightmapdict_t *lightmaps)
+{
+	const globalconfig_t &cfg = *lightsurf->cfg;
+	vec3_t dir;
+	float value;
+
+	Q_assert(entity->dome.boolValue());
+
+	vec3_t *myUps = (vec3_t *)calloc(lightsurf->numpoints, sizeof(vec3_t));
+	vec3_t *myRts = (vec3_t *)calloc(lightsurf->numpoints, sizeof(vec3_t));
+
+	raystream_t *rs = lightsurf->stream;
+
+	for (int j = 0; j < entity->domerays.size(); j++) {
+		rs->clearPushedRays();
+
+		for (int i = 0; i < lightsurf->numpoints; i++) {
+			if (lightsurf->occluded[i])
+				continue;
+			
+			glm_to_vec3_t(entity->domerays[j], dir);
+			if (DotProduct(dir, lightsurf->plane.normal) <= 0)
+				continue;
+
+			rs->pushRay(i, lightsurf->points[i], dir, MAX_SKY_DIST, lightsurf->modelinfo);
+		}
+
+		// trace the batch
+		rs->tracePushedRaysIntersection();
+		total_light_rays += rs->numPushedRays();
+
+		// if style is set, use appropriate light map
+		int cached_style = entity->style.intValue();
+		lightmap_t *cached_lightmap = Lightmap_ForStyle(lightmaps, cached_style, lightsurf);
+
+		// accumulate hits
+		for (int k = 0; k < rs->numPushedRays(); k++) {
+			if (!(rs->getPushedRayHitType(k) == hittype_t::SKY))
+				continue;
+
+			total_light_ray_hits++;
+
+			vec3_t lightcontrib, normalcontrib;
+			const int i = rs->getPushedRayPointIndex(k);
+
+			// check if we hit a dynamic shadow caster
+			int desired_style = entity->style.intValue();
+			if (rs->getPushedRayDynamicStyle(k) != 0) {
+				desired_style = rs->getPushedRayDynamicStyle(k);
+			}
+
+			// if necessary, switch which lightmap we are writing to.
+			if (desired_style != cached_style) {
+				cached_style = desired_style;
+				cached_lightmap = Lightmap_ForStyle(lightmaps, cached_style, lightsurf);
+			}
+
+			value = 1.0f / entity->domerays.size();
+			if (entity->falloff.floatValue()) {
+				value *= rs->getPushedRayHitDist(k) / entity->falloff.floatValue();
+			}
+
+			rs->getPushedRayDir(k, dir);
+			value *= GetLightValueWithAngle(cfg, entity, lightsurf->plane.normal, dir, 0, lightsurf->twosided);
+
+			if (entity->dirt.boolValue()) {
+				value *= Dirt_GetScaleFactor(cfg, lightsurf->occlusion[k], NULL, 0.0, lightsurf);
+			}
+
+			lightsample_t *sample = &cached_lightmap->samples[i];
+
+			VectorScale((float*)entity->color.vec3Value(), value / 255.0f, lightcontrib);
+			VectorScale((float*)entity->mangle.vec3Value(), entity->light.floatValue() * value, normalcontrib);
+
+			VectorAdd(sample->color, lightcontrib, sample->color);
+			VectorAdd(sample->direction, normalcontrib, sample->direction);
+			Lightmap_Save(lightmaps, lightsurf, cached_lightmap, entity->style.intValue());
+		}
+	}
+
+	free(myUps);
+	free(myRts);
+}
+
+/*
  * ================
  * LightFace_Entity
  * ================
@@ -1429,6 +1425,12 @@ LightFace_Entity(const mbsp_t *bsp,
                  const light_t *entity,
                 lightsurf_t *lightsurf, lightmapdict_t *lightmaps)
 {
+	if (entity->dome.boolValue())	// lunaran
+	{
+		LightFace_Dome(lightsurf, entity, lightmaps);
+		return;
+	}
+
     const globalconfig_t &cfg = *lightsurf->cfg;
     const modelinfo_t *modelinfo = lightsurf->modelinfo;
     const plane_t *plane = &lightsurf->plane;
@@ -1531,7 +1533,6 @@ static void
 LightFace_Sky(const sun_t *sun, const lightsurf_t *lightsurf, lightmapdict_t *lightmaps)
 {
     const globalconfig_t &cfg = *lightsurf->cfg;
-    const float MAX_SKY_DIST = 65536.0f;
     const modelinfo_t *modelinfo = lightsurf->modelinfo;
     const plane_t *plane = &lightsurf->plane;
     
