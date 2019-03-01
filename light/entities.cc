@@ -359,7 +359,7 @@ CheckEntityFields(const globalconfig_t &cfg, light_t *entity)
     }
 
     /* set up deviance and samples defaults */
-	if (entity->samples.intValue() == 0) { // lunaran - don't overwrite samples keyvalue from map
+	if (!entity->dome.boolValue()) { // lunaran - don't overwrite samples keyvalue from map
 		if (entity->deviance.floatValue() > 0 && entity->samples.intValue() == 0) {
 			entity->samples.setFloatValue(16);
 		}
