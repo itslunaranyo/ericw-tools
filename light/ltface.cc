@@ -1352,7 +1352,7 @@ LightFace_Dome(lightsurf_t *lightsurf, const light_t *entity, lightmapdict_t *li
 				continue;
 			
 			glm_to_vec3_t(entity->domerays[j], dir);
-			if (DotProduct(dir, lightsurf->plane.normal) <= 0)
+			if (DotProduct(dir, lightsurf->normals[i]) <= 0)
 				continue;
 
 			rs->pushRay(i, lightsurf->points[i], dir, MAX_SKY_DIST, lightsurf->modelinfo);
@@ -1395,7 +1395,7 @@ LightFace_Dome(lightsurf_t *lightsurf, const light_t *entity, lightmapdict_t *li
 			}
 
 			rs->getPushedRayDir(k, dir);
-			value *= GetLightValueWithAngle(cfg, entity, lightsurf->plane.normal, dir, 0, lightsurf->twosided);
+			value *= GetLightValueWithAngle(cfg, entity, lightsurf->normals[i], dir, 0, lightsurf->twosided);
 
 			if (entity->dirt.boolValue()) {
 				value *= Dirt_GetScaleFactor(cfg, lightsurf->occlusion[k], NULL, 0.0, lightsurf);
