@@ -1388,7 +1388,8 @@ LightFace_Dome(lightsurf_t *lightsurf, const light_t *entity, lightmapdict_t *li
 				cached_lightmap = Lightmap_ForStyle(lightmaps, cached_style, lightsurf);
 			}
 
-			value = 1.0f / entity->domerays.size();
+			//value = 1.0f / entity->domerays.size();
+			value = 1.0f / 255.0f;
 			if (entity->falloff.floatValue()) {
 				value *= rs->getPushedRayHitDist(k) / entity->falloff.floatValue();
 			}
